@@ -26,6 +26,7 @@ import com.example.ui.AppLockerScreen
 import com.example.ui.AppLockerViewModel
 import com.example.ui.SettingsScreen
 import com.example.ui.AnalyticsScreen
+import com.example.ui.CategoryDetailScreen
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -63,6 +64,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigateToAnalytics = {
                                     navController.navigate("analytics")
+                                },
+                                onNavigateToCategoryDetail = { categoryName ->
+                                    navController.navigate("category_detail/$categoryName")
                                 }
                             )
                         }
@@ -77,6 +81,16 @@ class MainActivity : ComponentActivity() {
                         composable("analytics") {
                             AnalyticsScreen(
                                 viewModel = viewModel,
+                                onNavigateBack = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable("category_detail/{categoryName}") { backStackEntry ->
+                            val categoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
+                            CategoryDetailScreen(
+                                viewModel = viewModel,
+                                categoryName = categoryName,
                                 onNavigateBack = {
                                     navController.popBackStack()
                                 }

@@ -52,6 +52,7 @@ class AppLockerService : Service() {
 
         fun setAppUnlocked(packageName: String) {
             unlockedAppsMap[packageName] = 0L
+            instance?.incrementUnlockCount(packageName)
         }
 
         fun clearUnlockedState() {
@@ -314,6 +315,17 @@ class AppLockerService : Service() {
             } catch (e: Exception) {
                 Log.e("AppLockerService", "Error inserting block event", e)
             }
+        }
+    }
+
+    fun incrementUnlockCount(packageName: String) {
+        try {
+            val prefs = getSharedPreferences("unlock_analytics_prefs", Context.MODE_PRIVATE)
+            val current = prefs.getInt(packageName, 0)
+            prefs.edit().putInt(packageName, current + 1).apply()
+            Log.d("AppLockerService", "incrementUnlockCount: $packageName to ${current + 1}")
+        } catch (e: Exception) {
+            Log.e("AppLockerService", "Error incrementing unlock count", e)
         }
     }
 

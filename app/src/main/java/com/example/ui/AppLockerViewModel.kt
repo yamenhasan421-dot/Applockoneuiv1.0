@@ -6,11 +6,14 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.graphics.drawable.toBitmap
 import com.example.data.AppPreferences
 import com.example.data.AppDatabase
 import com.example.data.BlockEvent
 import com.example.domain.AppInfo
+import com.example.domain.CategoryUiState
 import kotlinx.coroutines.Dispatchers
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +69,52 @@ class AppLockerViewModel(application: Application) : AndroidViewModel(applicatio
         initialValue = emptyMap()
     )
 
+    fun getCategoryForApp(packageName: String, customCategory: String?): String {
+        if (!customCategory.isNullOrBlank()) {
+            return customCategory
+        }
+        val pkg = packageName.lowercase()
+        return when {
+            pkg.contains("chat") || pkg.contains("social") || pkg.contains("messenger") || pkg.contains("whatsapp") || pkg.contains("facebook") || pkg.contains("instagram") || pkg.contains("twitter") || pkg.contains("reddit") || pkg.contains("viber") || pkg.contains("discord") || pkg.contains("telegram") || pkg.contains("snapchat") || pkg.contains("tiktok") -> "Social"
+            pkg.contains("mail") || pkg.contains("drive") || pkg.contains("calendar") || pkg.contains("office") || pkg.contains("sheet") || pkg.contains("doc") || pkg.contains("chrome") || pkg.contains("firefox") || pkg.contains("browser") || pkg.contains("pdf") || pkg.contains("clock") || pkg.contains("calculator") || pkg.contains("keep") || pkg.contains("notes") || pkg.contains("notebook") -> "Productivity"
+            pkg.contains("gallery") || pkg.contains("photos") || pkg.contains("youtube") || pkg.contains("vlc") || pkg.contains("player") || pkg.contains("music") || pkg.contains("spotify") || pkg.contains("netflix") || pkg.contains("camera") || pkg.contains("video") || pkg.contains("audio") || pkg.contains("sound") -> "Media"
+            pkg.contains("bank") || pkg.contains("wallet") || pkg.contains("pay") || pkg.contains("finance") || pkg.contains("card") || pkg.contains("crypto") || pkg.contains("cash") || pkg.contains("gpay") || pkg.contains("stripe") || pkg.contains("paypal") -> "Finance"
+            pkg.contains("contact") || pkg.contains("phone") || pkg.contains("call") || pkg.contains("message") || pkg.contains("mms") || pkg.contains("sms") || pkg.contains("setting") || pkg.contains("file") || pkg.contains("files") || pkg.contains("download") -> "Personal"
+            else -> "Others"
+        }
+    }
+
+    val categoriesState: StateFlow<List<CategoryUiState>> = kotlinx.coroutines.flow.combine(
+        _installedApps,
+        lockedApps,
+        appCategories
+    ) { apps, locked, customCategories ->
+        val predefined = listOf("Social", "Productivity", "Media", "Personal", "Finance", "Others")
+        
+        val groupings = apps.groupBy { appInfo ->
+            getCategoryForApp(appInfo.packageName, customCategories[appInfo.packageName])
+        }
+
+        val otherCustomCategories = customCategories.values.distinct()
+            .filter { it !in predefined && it.isNotBlank() }
+
+        val allCategories = predefined + otherCustomCategories
+
+        allCategories.map { category ->
+            val appsInCat = groupings[category] ?: emptyList()
+            val lockedCount = appsInCat.count { locked.contains(it.packageName) }
+            CategoryUiState(
+                categoryName = category,
+                totalApps = appsInCat.size,
+                lockedAppsCount = lockedCount
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     val appTimers: StateFlow<Map<String, Long>> = appPreferences.appTimersFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -96,8 +145,80 @@ class AppLockerViewModel(application: Application) : AndroidViewModel(applicatio
         initialValue = false
     )
 
+    private val _isAllPermissionsGranted = MutableStateFlow(false)
+    val isAllPermissionsGranted: StateFlow<Boolean> = _isAllPermissionsGranted.asStateFlow()
+
+    private val _usageStatsGranted = MutableStateFlow(false)
+    val usageStatsGranted: StateFlow<Boolean> = _usageStatsGranted.asStateFlow()
+
+    private val _notificationsGranted = MutableStateFlow(false)
+    val notificationsGranted: StateFlow<Boolean> = _notificationsGranted.asStateFlow()
+
+    private val _batteryOptimizationsIgnored = MutableStateFlow(false)
+    val batteryOptimizationsIgnored: StateFlow<Boolean> = _batteryOptimizationsIgnored.asStateFlow()
+
+    private val _overlaysGranted = MutableStateFlow(false)
+    val overlaysGranted: StateFlow<Boolean> = _overlaysGranted.asStateFlow()
+
+    fun refreshPermissionStatus() {
+        val context = getApplication<Application>()
+        val usageGranted = checkUsageStatsPermission(context)
+        val notifGranted = checkNotificationsPermission(context)
+        val battIgnored = checkBatteryOptimizationsIgnored(context)
+        val overlayGranted = checkOverlayPermission(context)
+
+        _usageStatsGranted.value = usageGranted
+        _notificationsGranted.value = notifGranted
+        _batteryOptimizationsIgnored.value = battIgnored
+        _overlaysGranted.value = overlayGranted
+
+        _isAllPermissionsGranted.value = usageGranted && notifGranted && battIgnored && overlayGranted
+    }
+
+    private fun checkUsageStatsPermission(context: android.content.Context): Boolean {
+        val appOps = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+        } else {
+            appOps.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+        }
+        return mode == android.app.AppOpsManager.MODE_ALLOWED
+    }
+
+    private fun checkNotificationsPermission(context: android.content.Context): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    private fun checkBatteryOptimizationsIgnored(context: android.content.Context): Boolean {
+        return com.example.SamsungBatteryHelper.isBatteryOptimizingIgnored(context)
+    }
+
+    private fun checkOverlayPermission(context: android.content.Context): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            android.provider.Settings.canDrawOverlays(context)
+        } else {
+            true
+        }
+    }
+
     init {
         loadInstalledApps()
+        refreshPermissionStatus()
     }
 
     private fun loadInstalledApps() {
@@ -117,7 +238,8 @@ class AppLockerViewModel(application: Application) : AndroidViewModel(applicatio
                 try {
                     val appName = resolveInfo.loadLabel(pm).toString()
                     val icon = resolveInfo.loadIcon(pm)
-                    AppInfo(packageName, appName, icon)
+                    val bitmap = icon?.toBitmap(width = 128, height = 128)
+                    AppInfo(packageName, appName, icon = icon, iconBitmap = bitmap)
                 } catch (e: Exception) {
                     Log.e("AppLockerViewModel", "Error loading app info", e)
                     null
@@ -144,6 +266,25 @@ class AppLockerViewModel(application: Application) : AndroidViewModel(applicatio
     fun toggleAppLock(packageName: String) {
         viewModelScope.launch {
             appPreferences.toggleAppLock(packageName)
+        }
+    }
+
+    fun setCategoryLockState(categoryName: String, lock: Boolean) {
+        viewModelScope.launch {
+            val apps = _installedApps.value
+            val customCategories = appCategories.value
+            val appsInCat = apps.filter { appInfo ->
+                getCategoryForApp(appInfo.packageName, customCategories[appInfo.packageName]) == categoryName
+            }
+            
+            appsInCat.forEach { appInfo ->
+                if (lock) {
+                    val customPeriod = appTimers.value[appInfo.packageName] ?: 60_000L
+                    appPreferences.lockApp(appInfo.packageName, categoryName, customPeriod)
+                } else {
+                    appPreferences.unlockApp(appInfo.packageName)
+                }
+            }
         }
     }
 

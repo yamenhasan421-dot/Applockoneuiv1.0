@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
@@ -48,17 +49,39 @@ fun AppLockerScreen(
     onPermissionSetupClick: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
+    onNavigateToCategoryDetail: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val filteredApps by viewModel.filteredApps.collectAsStateWithLifecycle()
+    val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val lockedApps by viewModel.lockedApps.collectAsStateWithLifecycle()
     val appCategories by viewModel.appCategories.collectAsStateWithLifecycle()
     val appTimers by viewModel.appTimers.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val gracePeriodMs by viewModel.gracePeriodMs.collectAsStateWithLifecycle()
+    val categoriesList by viewModel.categoriesState.collectAsStateWithLifecycle()
 
     var appToLock by remember { mutableStateOf<AppInfo?>(null) }
+
+    val isAllPermissionsGranted by viewModel.isAllPermissionsGranted.collectAsStateWithLifecycle()
+    val usageStatsGranted by viewModel.usageStatsGranted.collectAsStateWithLifecycle()
+    val notificationsGranted by viewModel.notificationsGranted.collectAsStateWithLifecycle()
+    val batteryOptimizationsIgnored by viewModel.batteryOptimizationsIgnored.collectAsStateWithLifecycle()
+    val overlaysGranted by viewModel.overlaysGranted.collectAsStateWithLifecycle()
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshPermissionStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Retrieve real-time background grace period variables from background service
     var activeTimers by remember { mutableStateOf<List<com.example.ActiveAppTimer>>(emptyList()) }
@@ -156,6 +179,18 @@ fun AppLockerScreen(
                         .fillMaxWidth(),
                     contentPadding = PaddingValues(bottom = 40.dp, start = 20.dp, end = 20.dp)
                 ) {
+                    if (!isAllPermissionsGranted) {
+                        item {
+                            PermissionsRequiredCard(
+                                viewModel = viewModel,
+                                usageStatsGranted = usageStatsGranted,
+                                notificationsGranted = notificationsGranted,
+                                batteryOptimizationsIgnored = batteryOptimizationsIgnored,
+                                overlaysGranted = overlaysGranted,
+                                modifier = Modifier.padding(bottom = 20.dp)
+                            )
+                        }
+                    }
                     
                     // CARD 1: Samsung Habits Hero Blue Banner
                     item {
@@ -323,100 +358,71 @@ fun AppLockerScreen(
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
                             
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // Category 1: Social
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFF141416))
-                                        .padding(16.dp)
-                                ) {
-                                    Column {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF1A2A44)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ChatBubble,
-                                                contentDescription = "Social",
-                                                tint = Color(0xFF3E82FC),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(14.dp))
-                                        Text("Social", color = Color(0xFFE2E4E9), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        val socialCount = lockedApps.count { it.contains("chat") || it.contains("social") || it.contains("messenger") || it.contains("whatsapp") || it.contains("facebook") || it.contains("instagram") }
-                                        Text(if (socialCount > 0) "$socialCount apps" else "Protected", color = Color(0xFF8B949E), fontSize = 12.sp)
-                                    }
-                                }
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                categoriesList.chunked(3).forEach { rowCategories ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        rowCategories.forEach { category ->
+                                            val (icon, tint, bgAccent) = when (category.categoryName) {
+                                                "Social" -> Triple(Icons.Default.ChatBubble, Color(0xFF3E82FC), Color(0xFF1A2A44))
+                                                "Productivity" -> Triple(Icons.Default.Business, Color(0xFF12BB8B), Color(0xFF172C27))
+                                                "Media" -> Triple(Icons.Default.Image, Color(0xFFA855F7), Color(0xFF2B1D3A))
+                                                "Personal" -> Triple(Icons.Default.Person, Color(0xFFFF9F0A), Color(0xFF352417))
+                                                "Finance" -> Triple(Icons.Default.CreditCard, Color(0xFFEAB308), Color(0xFF2E2A15))
+                                                else -> Triple(Icons.Default.Category, Color(0xFF94A3B8), Color(0xFF21252E))
+                                            }
 
-                                // Category 2: Productivity
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFF141416))
-                                        .padding(16.dp)
-                                ) {
-                                    Column {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF172C27)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Business,
-                                                contentDescription = "Productivity",
-                                                tint = Color(0xFF12BB8B),
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(24.dp))
+                                                    .background(Color(0xFF141416))
+                                                    .clickable { onNavigateToCategoryDetail(category.categoryName) }
+                                                    .padding(16.dp)
+                                            ) {
+                                                Column {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .background(bgAccent),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = icon,
+                                                            contentDescription = category.categoryName,
+                                                            tint = tint,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(14.dp))
+                                                    Text(
+                                                        text = category.categoryName,
+                                                        color = Color(0xFFE2E4E9),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 13.sp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = "${category.lockedAppsCount} / ${category.totalApps} locked",
+                                                        color = Color(0xFF8B949E),
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
                                         }
-                                        Spacer(modifier = Modifier.height(14.dp))
-                                        Text("Productivity", color = Color(0xFFE2E4E9), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        val prodCount = lockedApps.count { it.contains("mail") || it.contains("drive") || it.contains("calendar") || it.contains("office") || it.contains("sheet") || it.contains("chrome") }
-                                        Text(if (prodCount > 0) "$prodCount apps" else "Protected", color = Color(0xFF8B949E), fontSize = 12.sp)
-                                    }
-                                }
 
-                                // Category 3: Image / Media
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFF141416))
-                                        .padding(16.dp)
-                                ) {
-                                    Column {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF2B1D3A)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Image,
-                                                contentDescription = "Image/Media",
-                                                tint = Color(0xFFA855F7),
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                        if (rowCategories.size < 3) {
+                                            repeat(3 - rowCategories.size) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                            }
                                         }
-                                        Spacer(modifier = Modifier.height(14.dp))
-                                        Text("Media", color = Color(0xFFE2E4E9), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        val mediaCount = lockedApps.count { it.contains("gallery") || it.contains("photos") || it.contains("youtube") || it.contains("vlc") || it.contains("player") }
-                                        Text(if (mediaCount > 0) "$mediaCount apps" else "Protected", color = Color(0xFF8B949E), fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -450,21 +456,12 @@ fun AppLockerScreen(
                                             val totalSecondsMax = timer.totalSecondsMax.coerceAtLeast(1).toFloat()
                                             val fraction = (timer.secondsLeft.toFloat() / totalSecondsMax).coerceIn(0f, 1f)
                                             
-                                            val pm = context.packageManager
-                                            val displayName = remember(timer.packageName) {
-                                                try {
-                                                    val appInfo = pm.getApplicationInfo(timer.packageName, 0)
-                                                    pm.getApplicationLabel(appInfo).toString()
-                                                } catch (e: Exception) {
-                                                    timer.packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() }
-                                                }
+                                            val matchedApp = remember(timer.packageName, installedApps) {
+                                                installedApps.find { it.packageName == timer.packageName }
                                             }
-                                            val appIconDrawable = remember(timer.packageName) {
-                                                try {
-                                                    pm.getApplicationIcon(timer.packageName)
-                                                } catch (e: Exception) {
-                                                    null
-                                                }
+                                            val displayName = matchedApp?.appName ?: timer.packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() }
+                                            val appIconBitmap = remember(matchedApp) {
+                                                matchedApp?.iconBitmap?.asImageBitmap()
                                             }
 
                                             Column {
@@ -474,9 +471,9 @@ fun AppLockerScreen(
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) {
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        if (appIconDrawable != null) {
+                                                        if (appIconBitmap != null) {
                                                             Image(
-                                                                bitmap = appIconDrawable.toBitmap().asImageBitmap(),
+                                                                bitmap = appIconBitmap,
                                                                 contentDescription = null,
                                                                 modifier = Modifier
                                                                     .size(36.dp)
@@ -1001,13 +998,26 @@ fun AppItemRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            AsyncImage(
-                model = appInfo.icon,
-                contentDescription = "${appInfo.appName} Icon",
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
+            val appIconBitmap = remember(appInfo.packageName) {
+                appInfo.iconBitmap?.asImageBitmap()
+            }
+
+            if (appIconBitmap != null) {
+                Image(
+                    bitmap = appIconBitmap,
+                    contentDescription = "${appInfo.appName} Icon",
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF22242B))
+                )
+            }
 
             Column(
                 modifier = Modifier
@@ -1080,6 +1090,219 @@ fun AppItemRow(
                     uncheckedThumbColor = Color(0xFF8B949E),
                     uncheckedTrackColor = Color(0xFF22242B)
                 )
+            )
+        }
+    }
+}
+
+@Composable
+fun PermissionsRequiredCard(
+    viewModel: AppLockerViewModel,
+    usageStatsGranted: Boolean,
+    notificationsGranted: Boolean,
+    batteryOptimizationsIgnored: Boolean,
+    overlaysGranted: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    colors = listOf(Color(0xFF1C1E24), Color(0xFF141416))
+                )
+            )
+            .border(1.dp, Color(0xFF3E82FC).copy(alpha = 0.25f), RoundedCornerShape(28.dp))
+            .padding(20.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // Header Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Security Alert",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Action Required",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Grant permissions to protect apps",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF8B949E)
+                    )
+                }
+            }
+
+            // Permission Items List
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // 1. Usage Stats Permission
+                if (!usageStatsGranted) {
+                    PermissionItemRow(
+                        title = "Usage Access",
+                        description = "Detect when locked apps are launched",
+                        icon = Icons.Default.Apps,
+                        onGrantClick = {
+                            try {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // fallback
+                            }
+                        }
+                    )
+                }
+
+                // 2. Overlay Permission
+                if (!overlaysGranted) {
+                    PermissionItemRow(
+                        title = "Appear on Top",
+                        description = "Display the secure biometric locking screen",
+                        icon = Icons.Default.Layers,
+                        onGrantClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                try {
+                                    val intent = android.content.Intent(
+                                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        android.net.Uri.parse("package:${context.packageName}")
+                                    ).apply {
+                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // fallback
+                                }
+                            }
+                        }
+                    )
+                }
+
+                // 3. Notification Permission (Android 13+)
+                if (!notificationsGranted) {
+                    PermissionItemRow(
+                        title = "Notifications",
+                        description = "Keeps secure service running reliably",
+                        icon = Icons.Default.Notifications,
+                        onGrantClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                try {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // fallback request
+                                }
+                            }
+                        }
+                    )
+                }
+
+                // 4. Battery Optimization Exemptions
+                if (!batteryOptimizationsIgnored) {
+                    PermissionItemRow(
+                        title = "Background Activity",
+                        description = "Prevent sleep / kill on Samsung / OneUI",
+                        icon = Icons.Default.BatteryChargingFull,
+                        onGrantClick = {
+                            com.example.SamsungBatteryHelper.requestIgnoreBatteryOptimizations(context)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionItemRow(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onGrantClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF22242B).copy(alpha = 0.5f))
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF3E82FC).copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFF3E82FC),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF8B949E),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
+                )
+            }
+        }
+        
+        Button(
+            onClick = onGrantClick,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF3E82FC),
+                contentColor = Color.White
+            ),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            modifier = Modifier.height(32.dp)
+        ) {
+            Text(
+                text = "Grant",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
             )
         }
     }

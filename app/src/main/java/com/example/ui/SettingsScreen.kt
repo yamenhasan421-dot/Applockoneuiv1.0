@@ -72,6 +72,7 @@ fun SettingsScreen(
         },
         containerColor = Color(0xFF000000) // Pure pitch black matching AMOLED main UI
     ) { paddingValues ->
+        val context = androidx.compose.ui.platform.LocalContext.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -275,6 +276,102 @@ fun SettingsScreen(
                 }
             }
 
+            // Permanent Permissions Management Section
+            Text(
+                text = "System Permissions",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF3E82FC),
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+            )
+
+            val usageStatsGranted by viewModel.usageStatsGranted.collectAsStateWithLifecycle()
+            val notificationsGranted by viewModel.notificationsGranted.collectAsStateWithLifecycle()
+            val batteryOptimizationsIgnored by viewModel.batteryOptimizationsIgnored.collectAsStateWithLifecycle()
+            val overlaysGranted by viewModel.overlaysGranted.collectAsStateWithLifecycle()
+
+            // Observe resume lifecyle event to refresh permission status inside settings
+            val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                        viewModel.refreshPermissionStatus()
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose {
+                    lifecycleOwner.lifecycle.removeObserver(observer)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Color(0xFF141416))
+                    .border(1.dp, Color(0xFF3E82FC).copy(alpha = 0.15f), RoundedCornerShape(26.dp))
+                    .padding(20.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Item 1: Usage Access
+                    SettingsPermissionToggle(
+                        title = "Usage Access",
+                        description = "Required to detect when locked apps are launched.",
+                        isGranted = usageStatsGranted,
+                        onFixClick = {
+                            val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    // Item 2: Appear on Top
+                    SettingsPermissionToggle(
+                        title = "Appear on Top / Overlays",
+                        description = "Required to display secure lock screens over locked apps.",
+                        isGranted = overlaysGranted,
+                        onFixClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                val intent = android.content.Intent(
+                                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    android.net.Uri.parse("package:${context.packageName}")
+                                ).apply {
+                                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(intent)
+                            }
+                        }
+                    )
+
+                    // Item 3: Notification permission
+                    SettingsPermissionToggle(
+                        title = "Notifications",
+                        description = "Required to keep the locking service persistent & reliable.",
+                        isGranted = notificationsGranted,
+                        onFixClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(intent)
+                            }
+                        }
+                    )
+
+                    // Item 4: Battery exemptions
+                    SettingsPermissionToggle(
+                        title = "Background Activity",
+                        description = "Required to prevent the system from killing the background monitor.",
+                        isGranted = batteryOptimizationsIgnored,
+                        onFixClick = {
+                            com.example.SamsungBatteryHelper.requestIgnoreBatteryOptimizations(context)
+                        }
+                    )
+                }
+            }
+
             // Space out some padding at the bottom of the scrollable column
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -379,5 +476,82 @@ fun GlassCard(
             .clickable(onClick = onClick)
     ) {
         content()
+    }
+}
+
+@Composable
+fun SettingsPermissionToggle(
+    title: String,
+    description: String,
+    isGranted: Boolean,
+    onFixClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(if (isGranted) Color(0xFF10B981) else Color(0xFFEF4444))
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 14.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF8B949E),
+                lineHeight = 15.sp
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        if (isGranted) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "ACTIVE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF10B981)
+                )
+            }
+        } else {
+            Button(
+                onClick = onFixClick,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFEF4444).copy(alpha = 0.15f),
+                    contentColor = Color(0xFFEF4444)
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.height(30.dp)
+            ) {
+                Text(
+                    text = "FIX",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
