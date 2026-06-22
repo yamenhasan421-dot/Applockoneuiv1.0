@@ -110,7 +110,11 @@ class AppLockerService : Service() {
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .build()
 
-        startForeground(1, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(1, notification)
+        }
     }
     
     private var currentForegroundPackage = ""
@@ -224,8 +228,9 @@ class AppLockerService : Service() {
             val isUnlocked = exitTime != null && (exitTime == 0L || (System.currentTimeMillis() - exitTime) <= appGraceMs)
 
             if (!isUnlocked) {
-                // If not unlocked, enforce the lock overlay continuously if not visible
-                if (!OverlayActivity.isVisible) {
+                // If not unlocked, enforce the lock overlay continuously if not visible and not already pending
+                if (!OverlayActivity.isVisible && !OverlayActivity.isOverlayPending) {
+                    OverlayActivity.isOverlayPending = true
                     Log.d("AppLockerService", "Locked app $currentForegroundPackage in foreground but overlay is not visible. Forcing overlay.")
                     showLockOverlay(currentForegroundPackage)
                     logBlockEvent(currentForegroundPackage)

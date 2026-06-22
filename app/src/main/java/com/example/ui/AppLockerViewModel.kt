@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -392,42 +394,92 @@ class AppLockerViewModel(application: Application) : AndroidViewModel(applicatio
         initialValue = "{}"
     )
 
-    fun insertSampleData() {
-        viewModelScope.launch {
-            val db = AppDatabase.getDatabase(getApplication())
-            val apps = listOf(
-                Pair("com.instagram.android", "Instagram"),
-                Pair("com.facebook.katana", "Facebook"),
-                Pair("com.zhiliaoapp.musically", "TikTok"),
-                Pair("com.google.android.youtube", "YouTube")
-            )
-            
-            // Clear current data first for clean reset
-            db.blockEventDao().clearAllEvents()
-
-            // Generate some random blocks spread over the last 7 days
-            for (i in 1..28) {
-                val app = apps.random()
-                val randomDaysAgo = (0..6).random()
-                val calendarInstance = Calendar.getInstance()
-                calendarInstance.add(Calendar.DAY_OF_YEAR, -randomDaysAgo)
-                calendarInstance.set(Calendar.HOUR_OF_DAY, (8..22).random())
-                calendarInstance.set(Calendar.MINUTE, (0..59).random())
+    fun populateDemo() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val db = AppDatabase.getDatabase(getApplication())
+                val pm = getApplication<Application>().packageManager
                 
-                val event = BlockEvent(
-                    packageName = app.first,
-                    appLabel = app.second,
-                    timestamp = calendarInstance.timeInMillis
-                )
-                db.blockEventDao().insertEvent(event)
+                // Get the actual list of currently locked package names
+                val lockedAppsSet = appPreferences.lockedAppsFlow.first()
+                val demoApps = mutableListOf<Pair<String, String>>()
+                
+                if (lockedAppsSet.isNotEmpty()) {
+                    lockedAppsSet.forEach { pkg ->
+                        var label = ""
+                        try {
+                            val appInfo = pm.getApplicationInfo(pkg, 0)
+                            label = pm.getApplicationLabel(appInfo).toString()
+                        } catch (e: Exception) {
+                            label = pkg.substringAfterLast(".").replaceFirstChar { it.uppercase() }
+                        }
+                        demoApps.add(Pair(pkg, label))
+                    }
+                } else {
+                    // Fallback to 2 or 3 standard system apps if nothing is currently locked
+                    val fallbacks = listOf(
+                        Pair("com.android.chrome", "Chrome"),
+                        Pair("com.google.android.youtube", "YouTube"),
+                        Pair("com.whatsapp", "WhatsApp")
+                    )
+                    demoApps.addAll(fallbacks)
+                }
+
+                // Clear current data first for clean reset
+                db.blockEventDao().clearAllEvents()
+
+                // Generate smart randomized historical BlockEvent entries spread over the last 7 days
+                val totalEvents = (25..35).random()
+                for (i in 1..totalEvents) {
+                    val app = demoApps.random()
+                    val randomDaysAgo = (0..6).random()
+                    val calendarInstance = Calendar.getInstance()
+                    calendarInstance.add(Calendar.DAY_OF_YEAR, -randomDaysAgo)
+                    calendarInstance.set(Calendar.HOUR_OF_DAY, (8..22).random())
+                    calendarInstance.set(Calendar.MINUTE, (0..59).random())
+                    
+                    val event = BlockEvent(
+                        packageName = app.first,
+                        appLabel = app.second,
+                        timestamp = calendarInstance.timeInMillis
+                    )
+                    db.blockEventDao().insertEvent(event)
+                }
+
+                // Sync to legacy SharedPreferences for full compatibility
+                val prefs = getApplication<Application>().getSharedPreferences("unlock_analytics_prefs", Context.MODE_PRIVATE)
+                val editor = prefs.edit()
+                editor.clear()
+                demoApps.forEach { pair ->
+                    val count = db.blockEventDao().getAllEventsFlow().first().count { it.packageName == pair.first }
+                    if (count > 0) {
+                        editor.putInt(pair.first, count)
+                    }
+                }
+                editor.apply()
+            } catch (e: Exception) {
+                Log.e("AppLockerViewModel", "Error populating smart demo data", e)
             }
         }
     }
 
+    fun insertSampleData() {
+        populateDemo()
+    }
+
     fun clearStats() {
-        viewModelScope.launch {
-            val db = AppDatabase.getDatabase(getApplication())
-            db.blockEventDao().clearAllEvents()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Clear Room DB
+                val db = AppDatabase.getDatabase(getApplication())
+                db.blockEventDao().clearAllEvents()
+
+                // Clear legacy SharedPreferences
+                val prefs = getApplication<Application>().getSharedPreferences("unlock_analytics_prefs", Context.MODE_PRIVATE)
+                prefs.edit().clear().apply()
+            } catch (e: Exception) {
+                Log.e("AppLockerViewModel", "Error clearing stats", e)
+            }
         }
     }
 }

@@ -100,8 +100,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
 
-        requestPermissionsAndStartService()
+    override fun onResume() {
+        super.onResume()
+        if (hasUsageStatsPermission()) {
+            checkAndStartService()
+        }
     }
 
     private fun requestPermissionsAndStartService() {

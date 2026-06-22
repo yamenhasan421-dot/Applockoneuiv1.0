@@ -46,6 +46,9 @@ class OverlayActivity : AppCompatActivity() {
     companion object {
         @Volatile
         var isVisible = false
+
+        @Volatile
+        var isOverlayPending = false
     }
 
     private var targetPackage: String = ""
@@ -53,11 +56,18 @@ class OverlayActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isVisible = true
+        isOverlayPending = false
     }
 
     override fun onPause() {
         super.onPause()
         isVisible = false
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isVisible = false
+        isOverlayPending = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
