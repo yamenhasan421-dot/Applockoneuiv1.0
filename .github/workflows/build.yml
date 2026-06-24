@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ "main", "master" ]
 
-# إعطاء صلاحية لغيت هوب ليقوم بحفظ ورفع الملف تلقائياً إلى مستودعك
 permissions:
   contents: write
 
@@ -27,7 +26,7 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
 
-    # فحص إذا كان الملف موجوداً، وإذا لم يكن موجوداً يتم توليده وحفظ حالة التوليد
+    # فحص وجود الملف أو توليده
     - name: Check or Generate Debug Keystore
       run: |
         if [ ! -f debug.keystore ]; then
@@ -37,13 +36,17 @@ jobs:
           echo "GENERATED=false" >> $GITHUB_ENV
         fi
 
-    # إذا تم توليد ملف جديد، غيت هوب يقوم بعمل Commit و Push ليرفعه إلى مستودعك تلقائياً
+    # الإجبار على الرفع (Force Add) حتى لو كان الملف محجوباً بالـ .gitignore
     - name: Commit Keystore back to Repository
       if: env.GENERATED == 'true'
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add debug.keystore
+        
+        # استخدام الـ -f للإجبار على إضافة الملف المحجوب
+        git add -f debug.keystore
+        
+        # عمل الـ Commit والـ Push بأمان
         git commit -m "chore: persist generated debug.keystore for stable builds"
         git push
 
