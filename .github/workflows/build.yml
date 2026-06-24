@@ -26,7 +26,7 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
 
-    # فحص وجود الملف أو توليده
+    # 1. فحص وجود ملف التوقيع أو توليده
     - name: Check or Generate Debug Keystore
       run: |
         if [ ! -f debug.keystore ]; then
@@ -36,22 +36,27 @@ jobs:
           echo "GENERATED=false" >> $GITHUB_ENV
         fi
 
-    # الإجبار على الرفع (Force Add) حتى لو كان الملف محجوباً بالـ .gitignore
+    # 2. رفع ملف التوقيع مع منع الحلقة اللانهائية باستخدام [skip ci]
     - name: Commit Keystore back to Repository
       if: env.GENERATED == 'true'
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        # استخدام الـ -f للإجبار على إضافة الملف المحجوب
         git add -f debug.keystore
-        
-        # عمل الـ Commit والـ Push بأمان
-        git commit -m "chore: persist generated debug.keystore for stable builds"
+        # إضافة [skip ci] تخبر غيت هوب ألا يعيد تشغيل الـ Workflow بسبب هذا الرفع
+        git commit -m "chore: persist generated debug.keystore [skip ci]"
         git push
 
+    # 3. بناء التطبيق الذكي (استخدام الـ Wrapper إن وجد، أو الانتقال للـ System Gradle فوراً)
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: |
+        if [ -f ./gradlew ]; then
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+        else
+          echo "Gradle wrapper not found. Using system gradle."
+          gradle assembleDebug
+        fi
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
