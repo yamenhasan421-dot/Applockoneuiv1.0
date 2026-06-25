@@ -39,6 +39,14 @@
             android:exported="false"
             android:launchMode="singleInstance" />
 
+        <activity android:name=".FullScreenLockActivity"
+            android:theme="@style/Theme.FullScreenLock"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:exported="false"
+            android:launchMode="singleInstance" />
+
         <service android:name=".AppLockerService"
             android:foregroundServiceType="specialUse"
             android:exported="false">

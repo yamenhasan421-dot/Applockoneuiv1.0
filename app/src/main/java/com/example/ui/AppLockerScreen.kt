@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
@@ -40,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.domain.AppInfo
 import com.example.AppLockerService
 import com.example.SamsungBatteryHelper
+import com.example.data.FingerprintType
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
@@ -65,6 +67,8 @@ fun AppLockerScreen(
     var appToLock by remember { mutableStateOf<AppInfo?>(null) }
 
     val isAllPermissionsGranted by viewModel.isAllPermissionsGranted.collectAsStateWithLifecycle()
+    val isAppReadyToRun by viewModel.isAppReadyToRun.collectAsStateWithLifecycle()
+    val fingerprintType by viewModel.fingerprintType.collectAsStateWithLifecycle()
     val usageStatsGranted by viewModel.usageStatsGranted.collectAsStateWithLifecycle()
     val notificationsGranted by viewModel.notificationsGranted.collectAsStateWithLifecycle()
     val batteryOptimizationsIgnored by viewModel.batteryOptimizationsIgnored.collectAsStateWithLifecycle()
@@ -179,7 +183,7 @@ fun AppLockerScreen(
                         .fillMaxWidth(),
                     contentPadding = PaddingValues(bottom = 40.dp, start = 20.dp, end = 20.dp)
                 ) {
-                    if (!isAllPermissionsGranted) {
+                    if (!isAppReadyToRun) {
                         item {
                             PermissionsRequiredCard(
                                 viewModel = viewModel,
@@ -187,6 +191,10 @@ fun AppLockerScreen(
                                 notificationsGranted = notificationsGranted,
                                 batteryOptimizationsIgnored = batteryOptimizationsIgnored,
                                 overlaysGranted = overlaysGranted,
+                                isAllPermissionsGranted = isAllPermissionsGranted,
+                                isAppReadyToRun = isAppReadyToRun,
+                                fingerprintType = fingerprintType,
+                                onPermissionSetupClick = onPermissionSetupClick,
                                 modifier = Modifier.padding(bottom = 20.dp)
                             )
                         }
@@ -1102,6 +1110,10 @@ fun PermissionsRequiredCard(
     notificationsGranted: Boolean,
     batteryOptimizationsIgnored: Boolean,
     overlaysGranted: Boolean,
+    isAllPermissionsGranted: Boolean,
+    isAppReadyToRun: Boolean,
+    fingerprintType: FingerprintType,
+    onPermissionSetupClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1229,6 +1241,152 @@ fun PermissionsRequiredCard(
                         onGrantClick = {
                             com.example.SamsungBatteryHelper.requestIgnoreBatteryOptimizations(context)
                         }
+                    )
+                }
+            }
+
+            // Fingerprint hardware selection section
+            AnimatedVisibility(visible = isAllPermissionsGranted) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HorizontalDivider(color = Color(0xFF22242B), thickness = 1.dp)
+                    
+                    Text(
+                        text = "Where is your fingerprint scanner located?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    
+                    Text(
+                        text = "Under-Display scanners crash on Android 16 with overlay screens. We use standard opaque activities to safely resolve this physical limitation.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF8B949E)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Option 1: Under Screen
+                        val isUnderScreen = fingerprintType == FingerprintType.UNDER_DISPLAY
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (isUnderScreen) Color(0xFF3E82FC).copy(alpha = 0.15f) else Color(0xFF22242B))
+                                .border(
+                                    1.dp,
+                                    if (isUnderScreen) Color(0xFF3E82FC) else Color.Transparent,
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .clickable {
+                                    viewModel.setFingerprintType(FingerprintType.UNDER_DISPLAY)
+                                }
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.Fingerprint,
+                                    contentDescription = "Under Screen Scanner",
+                                    tint = if (isUnderScreen) Color(0xFF3E82FC) else Color(0xFF8B949E),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Under Screen",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isUnderScreen) Color.White else Color(0xFF8B949E),
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "Optical / Sonic",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF8B949E).copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        // Option 2: Side-Mounted (Power Button)
+                        val isSideMounted = fingerprintType == FingerprintType.SIDE_MOUNTED
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (isSideMounted) Color(0xFF3E82FC).copy(alpha = 0.15f) else Color(0xFF22242B))
+                                .border(
+                                    1.dp,
+                                    if (isSideMounted) Color(0xFF3E82FC) else Color.Transparent,
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .clickable {
+                                    viewModel.setFingerprintType(FingerprintType.SIDE_MOUNTED)
+                                }
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.PowerSettingsNew,
+                                    contentDescription = "Side-Mounted Scanner",
+                                    tint = if (isSideMounted) Color(0xFF3E82FC) else Color(0xFF8B949E),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Power Button",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSideMounted) Color.White else Color(0xFF8B949E),
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "Physical Side Sensor",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF8B949E).copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Action Button
+            Button(
+                onClick = onPermissionSetupClick,
+                enabled = isAppReadyToRun,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3E82FC),
+                    disabledContainerColor = Color(0xFF22242B),
+                    contentColor = Color.White,
+                    disabledContentColor = Color(0xFF5A5C63)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Complete",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Complete Setup",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
                 }
             }

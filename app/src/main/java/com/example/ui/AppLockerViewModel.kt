@@ -11,6 +11,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.example.data.AppPreferences
 import com.example.data.AppDatabase
 import com.example.data.BlockEvent
+import com.example.data.FingerprintType
 import com.example.domain.AppInfo
 import com.example.domain.CategoryUiState
 import kotlinx.coroutines.Dispatchers
@@ -149,6 +150,29 @@ class AppLockerViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _isAllPermissionsGranted = MutableStateFlow(false)
     val isAllPermissionsGranted: StateFlow<Boolean> = _isAllPermissionsGranted.asStateFlow()
+
+    val fingerprintType: StateFlow<FingerprintType> = appPreferences.fingerprintTypeFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = FingerprintType.UNKNOWN
+    )
+
+    val isAppReadyToRun: StateFlow<Boolean> = kotlinx.coroutines.flow.combine(
+        isAllPermissionsGranted,
+        fingerprintType
+    ) { allGranted, fpType ->
+        allGranted && fpType != FingerprintType.UNKNOWN
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setFingerprintType(type: FingerprintType) {
+        viewModelScope.launch(Dispatchers.IO) {
+            appPreferences.setFingerprintType(type)
+        }
+    }
 
     private val _usageStatsGranted = MutableStateFlow(false)
     val usageStatsGranted: StateFlow<Boolean> = _usageStatsGranted.asStateFlow()

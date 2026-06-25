@@ -11,4 +11,8 @@
         <item name="android:windowIsFloating">false</item>
         <item name="android:backgroundDimEnabled">false</item>
     </style>
+    <style name="Theme.FullScreenLock" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#0F1016</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

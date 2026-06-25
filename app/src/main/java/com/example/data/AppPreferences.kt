@@ -13,6 +13,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
+enum class FingerprintType {
+    UNKNOWN, UNDER_DISPLAY, SIDE_MOUNTED
+}
+
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_locker_prefs")
 
 class AppPreferences(private val context: Context) {
@@ -23,6 +27,23 @@ class AppPreferences(private val context: Context) {
     private val APP_TIMERS_KEY = stringSetPreferencesKey("app_timers_map")
     private val UNLOCK_PATTERN_KEY = stringPreferencesKey("unlock_pattern")
     private val USE_DEVICE_LOCK_KEY = booleanPreferencesKey("use_device_lock")
+    private val FINGERPRINT_TYPE_KEY = stringPreferencesKey("fingerprint_type")
+
+    val fingerprintTypeFlow: Flow<FingerprintType> = context.dataStore.data
+        .map { preferences ->
+            val name = preferences[FINGERPRINT_TYPE_KEY] ?: FingerprintType.UNKNOWN.name
+            try {
+                FingerprintType.valueOf(name)
+            } catch (e: Exception) {
+                FingerprintType.UNKNOWN
+            }
+        }
+
+    suspend fun setFingerprintType(type: FingerprintType) {
+        context.dataStore.edit { preferences ->
+            preferences[FINGERPRINT_TYPE_KEY] = type.name
+        }
+    }
 
     val useDeviceLockFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->

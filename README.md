@@ -1,38 +1,21 @@
-# 🛡️ AppLocker - Premium Security for One UI
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-A professional, secure, and elegantly designed app locker tailored specifically for the **Samsung One UI 8.5** ecosystem. Take full control of your privacy with a seamless and premium user experience.
+# Run and deploy your AI Studio app
 
-![Free](https://img.shields.io/badge/Price-100%25_Free-success?style=for-the-badge)
-![No Ads](https://img.shields.io/badge/Ads-Zero_Ads-red?style=for-the-badge)
-![Kotlin](https://img.shields.io/badge/Kotlin-100%25-blue?style=for-the-badge&logo=kotlin)
+This contains everything you need to run your app locally.
 
----
+View your app in AI Studio: https://ai.studio/apps/fae3c3a6-63d3-42cc-af46-f97ef8146487
 
-## ✨ Key Features
+## Run Locally
 
-* 🎨 **Exclusive One UI 8.5 Design:** Features Material You dynamic theming, premium Glassmorphism effects, and smooth squircle corners to perfectly match the native Samsung experience.
-* 🛡️ **Native System Security:** No fake lock screens! We utilize your device's native security prompt (Fingerprint, Face Unlock, PIN, or Pattern) via AndroidX Biometrics for maximum safety.
-* 📁 **Smart Categories:** Organize apps into categories (Social, Productivity, Media, etc.). Secure an entire category with a single tap using the "Lock All" master switch.
-* ⏱️ **Smart Lock Timers (Grace Period):** Tired of unlocking every second? Set a custom grace period (e.g., 1 minute) to switch between locked apps freely. The lock only triggers when the time expires, you exit the app, or the screen turns off.
-* 📊 **Usage Analytics:** Keep track of your locked app usage with beautiful, dynamic statistical cards.
-* 🔋 **Battery Optimized:** Engineered to run flawlessly in the background without draining your battery, fully integrated with Samsung's Device Care.
+**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
 
----
 
-## 🔒 Privacy First
-
-This app was built to protect you, not to exploit you. We strictly adhere to the following principles:
-* **100% Free:** All premium features are unlocked out of the box. No hidden fees or in-app purchases.
-* **Zero Ads:** Absolutely no pop-ups, banners, or annoying interruptions. A pure, clean user experience.
-* **Fully Offline:** This app requires no internet connection. It does not collect, store, or transmit any personal data. Your data never leaves your device.
-
----
-
-## 🛠️ Tech Stack
-
-* **Language:** Kotlin
-* **UI Framework:** Jetpack Compose
-* **Architecture:** MVVM (Model-View-ViewModel)
-* **Asynchronous:** Kotlin Coroutines & Flows
-* **Security:** AndroidX Biometric Prompt
-* **Background Processing:** Foreground Services & UsageStatsManager
+1. Open Android Studio
+2. Select **Open** and choose the directory containing this project
+3. Allow Android Studio to fix any incompatibilities as it imports the project.
+4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
+5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
+6. Run the app on an emulator or physical device
