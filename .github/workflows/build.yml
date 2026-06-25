@@ -1,0 +1,72 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+permissions:
+  contents: write # ضروري جداً عشان يقدر غيت هوب ينشئ الـ Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '9.3.1'
+
+    - name: Check or Generate Debug Keystore
+      run: |
+        if [ ! -f debug.keystore ]; then
+          keytool -genkey -v -keystore debug.keystore -keyalg RSA -keysize 2048 -validity 10000 -alias androiddebugkey -keypass android -storepass android -dname "CN=Android Debug,O=Android,C=US"
+          echo "GENERATED=true" >> $GITHUB_ENV
+        else
+          echo "GENERATED=false" >> $GITHUB_ENV
+        fi
+
+    - name: Commit Keystore back to Repository
+      if: env.GENERATED == 'true'
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add -f debug.keystore
+        git commit -m "chore: persist generated debug.keystore [skip ci]"
+        git push
+
+    - name: Build Debug APK
+      run: gradle assembleDebug
+
+    # إضافة جديدة: هذه الخطوة ستأخذ ملف الـ APK وتضعه في صفحة الـ Releases
+    - name: Create Release and Upload APK
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/heads/')
+      with:
+        tag_name: v1.1 # يمكنك تغيير الرقم مع كل إصدار
+        name: Release v1.1
+        body: "تحديث جديد للتطبيق تم بناؤه تلقائياً بواسطة غيت هوب."
+        files: app/build/outputs/apk/debug/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create Release and Upload APK
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/heads/')
+      with:
+        tag_name: v1.1
+        name: Release v1.1
+        body: "تحديث جديد للبناء التلقائي."
+        files: app/build/outputs/apk/debug/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
