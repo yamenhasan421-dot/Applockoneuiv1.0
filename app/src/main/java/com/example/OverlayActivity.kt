@@ -133,7 +133,7 @@ class OverlayActivity : AppCompatActivity() {
         }
 
         setContent {
-            OneUILockScreen(
+            com.example.ui.OneUILockScreen(
                 appLabel = appLabel,
                 appIconDrawable = appIconDrawable,
                 actualUnlockSuccess = {
@@ -141,7 +141,7 @@ class OverlayActivity : AppCompatActivity() {
                     finish()
                 },
                 actualCancelClick = { goHome() },
-                onLaunchSystemBiometrics = { onSuccess ->
+                onLaunchSystemBiometrics = { onSuccess: () -> Unit ->
                     showSystemBiometricPrompt(appLabel, onSuccess)
                 }
             )
