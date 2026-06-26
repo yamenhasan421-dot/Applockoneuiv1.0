@@ -1,4 +1,4 @@
-Name: Build Android APK
+name: Build Android APK
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ "main", "master" ]
 
 permissions:
-  contents: write # ضروري جداً عشان يقدر غيت هوب ينشئ الـ Release
+  contents: write # Required for GitHub Actions to create releases and push the keystore
 
 jobs:
   build:
@@ -47,16 +47,19 @@ jobs:
         git push
 
     - name: Build Debug APK
-      run: gradle assembleDebug
+      run: ./gradlew assembleDebug # Changed to gradlew to prevent environment mismatches
 
-    # التعديل تم هنا لرفع النسخة الجديدة 1.2
     - name: Create Release and Upload APK
       uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/heads/')
+      if: github.event_name == 'push' # Only create a release on actual pushes, not PRs
       with:
-        tag_name: v1.2 # تم تحديث التاغ إلى v1.2
-        name: Release v1.2 # تم تحديث اسم الإصدار إلى v1.2
-        body: "تحديث جديد للتطبيق (إصدار 1.2) تم بناؤه تلقائياً بواسطة غيت هوب مع إرشادات البطارية وحلول الأداء."
+        tag_name: v1.2-b${{ github.run_number }} # Dynamic tag (e.g., v1.2-b1, v1.2-b2) so it never errors out
+        name: Release v1.2 (Build #${{ github.run_number }})
+        body: |
+          Automated build for version 1.2.
+          - Fixed Android 16 Under-Display fingerprint sensor crash.
+          - Optimized lazy-loading for app lists to eliminate scroll lag.
+          - Added "Unrestricted" battery usage onboarding prompt.
         files: app/build/outputs/apk/debug/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
